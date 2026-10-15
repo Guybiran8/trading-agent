@@ -1,0 +1,224 @@
+breakout_v1 + random_matched — 2026-10-06 — IN-SAMPLE ONLY (OOS never simulated)
+================================================================================
+
+SUMMARY
+- breakout_v1 IS: 18,486 trades, mean -0.10%/trade, median -0.76%, win 43.8%, portfolio -7.9%, maxDD -19.1%.
+- random_matched IS: 18,497 trades, mean -0.25%/trade, median -0.35%, win 45.6%, portfolio +2.2%, maxDD -9.2%.
+- SPY buy & hold over IS: +21.9%. Neither one beats SPY over the same windows (+0.24% / +0.28% per trade).
+- The breakout's mean per trade is 0.15pp above the control, but its median, win rate, portfolio return and drawdown
+  are all worse. In-sample there is no clear edge over the matched control.
+- Future-data check: PASS (details below).
+
+DECISIONS / DEVIATIONS — please review
+1. Universe = engine.liquid_mask, unchanged ($5 close, $5M 20-day avg $vol), per your Option A.
+2. ENGINE CHANGE (approved via question): the engine couldn't express "entry open − 2×ATR". I added an optional
+   Signal.stop_dist field (stop = entry open − stop_dist) and put it in _signal_key so the look-ahead guard covers it.
+   Nothing else changed. Proof that existing behaviour is unchanged: all tests pass (plus a new stop_dist test), and
+   random_liquid's full trade list is bit-identical before/after (2193 trades, sha256 88976a73…6d703, both runs).
+   Pre-edit backup: scratchpad engine.py.pre_stopdist (the older engine.py.bak in backtest/ is untouched).
+3. "No target" = target=np.inf (never hit). Time exit = max_hold=10 (entry day counts as day 1, so exit at the close
+   of the 10th trading day held). The engine's existing rules still apply: 0.1% slippage per side, a stop that gaps
+   through fills at the open. With no target, the "stop wins ties" rule is moot.
+4. ATR(14) = Wilder (approved). TR uses the prior row's close (H−L if that's missing); non-traded days are skipped.
+   Undefined (no signal) if there are fewer than 14 TRs.
+5. breakout_v1 requires bars on all 20 days t-20..t-1. SPY SMA50 = mean of SPY closes t-49..t (includes t).
+6. random_matched: stocks with no ATR(14) yet (<14 bars, so the stop is undefined) are INELIGIBLE. It walks a seeded
+   (crc32 of the date) random permutation of the universe and keeps the first N that have an ATR. Without this, 51 of
+   216 signal days came up short of N. N now matches exactly on every signal day (verified, 0 mismatches). Breakout
+   stocks are still eligible.
+7. IS-only: added `report.py --is-only`. Strategies return [] on days >= split, so no OOS trade is ever simulated or
+   computed, and only the IS row is printed. The future-data check also ran on IS days only.
+   Trades vs signals: 18,505 signals → 18,486 trades (19 had no next-day open).
+8. Signal volume is large (median 71/day, max 419). With $5M ADV the universe is broad. Per spec, all signals are
+   taken with no ranking.
+
+FILES CHANGED: backtest/engine.py (stop_dist only), backtest/strategies.py (+2 strategies, ATR helper),
+               backtest/report.py (--is-only), backtest/test_engine.py (+1 test)
+
+---- STEP 3: FUTURE-DATA CHECK (IS days) ----
+IS days 2024-12-26..2026-02-24 (290); days with signals 216; total signals 18505; per signal-day median 71 max 419
+PASS look-ahead: breakout_v1 unchanged on 76 IS days (40 with breakout signals) when all rows after day t are scrambled
+PASS look-ahead: random_matched unchanged on 76 IS days (40 with breakout signals) when all rows after day t are scrambled
+PASS guard sanity: cheater (peeks at t+1) is caught on the same data
+random_matched count != breakout count on 0 of 216 signal days (must be 0)
+spot check 2025-08-07 AAPB: close 22.85 > max H[t-20..t-1] 22.13; vol 999815 >= 1.5x455991; SPY 632.25 > SMA50 615.05; ATR14 0.952 stop_dist 1.904 target inf hold 10
+(run_backtest also ran its own 20-day look-ahead guard for both strategies during the report: passed)
+
+---- STEP 4: report.py --is-only breakout_v1 random_matched ----
+data 2024-10-01..2026-09-29 (500 days, 16011 tickers); IS <2026-02-25 <= OOS   [IS ONLY: OOS not simulated]
+                       trades   win%  med%  mean%  mean% -top5  port%  port% -top5  maxDD%  SPY same-window%  SPY b&h%  SPY maxDD%
+strategy       period                                                                                                             
+breakout_v1    IS       18486  43.84 -0.76  -0.10         -0.3  -7.93       -11.28  -19.08              0.24      21.9       -19.0
+random_matched IS       18497  45.61 -0.35  -0.25         -0.3   2.16         1.27   -9.24              0.28      21.9       -19.0
+
+---- engine.py diff ----
+9c9,10
+< either absolute prices or percentages of that entry open. Strategies must be
+---
+> either absolute prices, percentages of that entry open, or (stop only) a fixed
+> distance below that entry open (stop_dist). Strategies must be
+50a52
+>     stop_dist: float = None       # ...or price distance below entry open, e.g. 2*ATR
+137c139
+<     return sorted((s.ticker, s.max_hold, s.stop, s.target, s.stop_pct, s.target_pct) for s in sigs)
+---
+>     return sorted((s.ticker, s.max_hold, s.stop, s.target, s.stop_pct, s.target_pct, s.stop_dist) for s in sigs)
+158c160,165
+<     stop = sig.stop if sig.stop is not None else open_e * (1 - sig.stop_pct)
+---
+>     if sig.stop is not None:
+>         stop = sig.stop
+>     elif sig.stop_dist is not None:
+>         stop = open_e - sig.stop_dist
+>     else:
+>         stop = open_e * (1 - sig.stop_pct)
+
+---- strategies.py: new code ----
+def atr_wilder(view, j, n=14):
+    """Wilder ATR(n) of ticker column j as of view's last day (rows 0..i only).
+    True range uses the prior row's close; if that's missing (didn't trade) TR = H - L.
+    Days the ticker didn't trade are skipped. NaN if fewer than n valid TRs."""
+    h, l, c = view.high[:, j], view.low[:, j], view.close[:, j]
+    pc = np.concatenate(([np.nan], c[:-1]))
+    with np.errstate(invalid="ignore"):
+        tr = np.fmax(h - l, np.fmax(np.abs(h - pc), np.abs(l - pc)))   # fmax ignores NaN pc
+    tr = tr[~np.isnan(tr)]
+    if len(tr) < n:
+        return np.nan
+    atr = tr[:n].mean()
+    for x in tr[n:]:
+        atr = (atr * (n - 1) + x) / n
+    return atr
+
+
+def _atr_signal(view, j, max_hold, atr_mult):
+    """Long, stop = entry open - atr_mult * ATR(14) as of day t, no target. None if no ATR."""
+    atr = atr_wilder(view, j)
+    if not (np.isfinite(atr) and atr > 0):
+        return None
+    return Signal(view.tickers[j], max_hold, stop_dist=atr_mult * atr, target=np.inf)
+
+
+def breakout_v1(view, lookback=20, vol_mult=1.5, spy_sma=50, max_hold=10, atr_mult=2.0):
+    """20-day high breakout on 1.5x volume, only while SPY closes above its 50-day SMA.
+    Universe = engine liquid_mask ($5 close, $5M 20d avg $vol). Takes every signal.
+    Prior 20 days (t-20..t-1) must all have bars for the ticker."""
+    if view.i < max(lookback, spy_sma - 1):
+        return []
+    js = int(np.searchsorted(view.tickers, "SPY"))
+    spy = view.close[-spy_sma:, js]
+    if np.isnan(spy).any() or not spy[-1] > spy.mean():
+        return []
+    hh, vv = view.high[-lookback - 1:-1], view.volume[-lookback - 1:-1]
+    complete = ~np.isnan(hh).any(axis=0) & ~np.isnan(vv).any(axis=0)
+    with np.errstate(invalid="ignore"):
+        hit = (view.liquid() & complete
+               & (view.close[-1] > np.nanmax(np.where(complete, hh, 0), axis=0))
+               & (view.volume[-1] >= vol_mult * np.where(complete, vv, 0).mean(axis=0)))
+    sigs = (_atr_signal(view, j, max_hold, atr_mult) for j in np.flatnonzero(hit))
+    return [s for s in sigs if s is not None]
+
+
+def random_matched(view, max_hold=10, atr_mult=2.0):
+    """Control for breakout_v1: on each day it has N signals, N random stocks (no
+    replacement) from the same full liquid universe, breakout stocks included.
+    Same entry / ATR stop / time exit. Stocks with no ATR(14) yet (< 14 bars, stop
+    undefined) are ineligible: walk a random permutation, keep the first N with one."""
+    n = len(breakout_v1(view, max_hold=max_hold, atr_mult=atr_mult))
+    if n == 0:
+        return []
+    rng = np.random.default_rng(zlib.crc32(str(view.date).encode()))
+    sigs = []
+    for j in rng.permutation(np.flatnonzero(view.liquid())):
+        s = _atr_signal(view, j, max_hold, atr_mult)
+        if s is not None:
+            sigs.append(s)
+            if len(sigs) == n:
+                break
+    return sigs
+
+
+STRATEGIES += {"breakout_v1": breakout_v1, "random_matched": random_matched}
+
+---- report.py diff ----
+4c4,7
+<     cd /root/trading-agent/backtest && ../venv/bin/python report.py
+---
+>     cd /root/trading-agent/backtest && ../venv/bin/python report.py [--is-only] [names...]
+> 
+> --is-only: strategies are silenced on out-of-sample days, so no OOS trade is ever
+> simulated, and only the IS row is printed.
+5a9
+> import functools
+43c47,55
+< def main(names=None):
+---
+> def _until(strategy, split):
+>     """Strategy that only signals on days before `split` (IS-only mode)."""
+>     @functools.wraps(strategy)
+>     def gated(view):
+>         return strategy(view) if view.i < split else []
+>     return gated
+> 
+> 
+> def main(names=None, is_only=False):
+48c60
+<           f"IS <{panel.dates[split]} <= OOS")
+---
+>           f"IS <{panel.dates[split]} <= OOS" + ("   [IS ONLY: OOS not simulated]" if is_only else ""))
+51,52c63,66
+<         tr = run_backtest(STRATEGIES[name], panel)
+<         for label, lo, hi in (("IS", 0, split), ("OOS", split, T - 1)):
+---
+>         strat = _until(STRATEGIES[name], split) if is_only else STRATEGIES[name]
+>         tr = run_backtest(strat, panel)
+>         periods = (("IS", 0, split),) if is_only else (("IS", 0, split), ("OOS", split, T - 1))
+>         for label, lo, hi in periods:
+64c78,79
+<     main(sys.argv[1:] or None)
+---
+>     args = sys.argv[1:]
+>     main([a for a in args if not a.startswith("--")] or None, is_only="--is-only" in args)
+
+---- future-data check script (/tmp/claude-0/-root-trading-agent/51f2d582-8c99-4d18-a41a-d07ebee8e17a/scratchpad/fdcheck.py) ----
+# Future-data check for breakout_v1 (+ random_matched), IS days only.
+import sys
+sys.path.insert(0, "/root/trading-agent/backtest")
+import numpy as np
+from engine import DataView, LookaheadError, Panel, check_lookahead
+from report import IS_FRACTION
+from strategies import atr_wilder, breakout_v1, cheater, random_matched
+
+p = Panel.from_sqlite()
+T = len(p.dates); split = int(T * IS_FRACTION); W = 60
+is_days = range(W, split)
+
+# signal counts over IS days
+n = np.array([len(breakout_v1(DataView(p, i))) for i in is_days])
+sig_days = np.array(is_days)[n > 0]
+print(f"IS days {p.dates[W]}..{p.dates[split-1]} ({len(n)}); days with signals {len(sig_days)}; "
+      f"total signals {n.sum()}; per signal-day median {np.median(n[n>0]):.0f} max {n.max()}")
+
+rng = np.random.default_rng(1)
+even = np.unique(np.linspace(W, split - 1, 40).astype(int))
+busy = rng.choice(sig_days, size=min(40, len(sig_days)), replace=False)
+days = np.unique(np.concatenate([even, busy]))
+for f in (breakout_v1, random_matched):
+    check_lookahead(f, p, days, seed=7)
+    print(f"PASS look-ahead: {f.__name__} unchanged on {len(days)} IS days ({len(busy)} with breakout signals) "
+          f"when all rows after day t are scrambled")
+try:
+    check_lookahead(cheater, p, days[:5]); print("FAIL: guard missed cheater")
+except LookaheadError:
+    print("PASS guard sanity: cheater (peeks at t+1) is caught on the same data")
+
+# random_matched N == breakout N on signal days; ATR-skips
+mism = sum(len(random_matched(DataView(p, i))) != len(breakout_v1(DataView(p, i))) for i in sig_days)
+print(f"random_matched count != breakout count on {mism} of {len(sig_days)} signal days (must be 0)")
+
+# hand-verify one signal
+i = int(busy[0]); v = DataView(p, i); s = breakout_v1(v)[0]; j = p.col[s.ticker]
+spy = p.col["SPY"]
+print(f"spot check {p.dates[i]} {s.ticker}: close {p.c[i,j]:.2f} > max H[t-20..t-1] {np.max(p.h[i-20:i,j]):.2f}; "
+      f"vol {p.v[i,j]:.0f} >= 1.5x{np.mean(p.v[i-20:i,j]):.0f}; SPY {p.c[i,spy]:.2f} > SMA50 {p.c[i-49:i+1,spy].mean():.2f}; "
+      f"ATR14 {atr_wilder(v,j):.3f} stop_dist {s.stop_dist:.3f} target {s.target} hold {s.max_hold}")

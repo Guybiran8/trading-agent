@@ -1,0 +1,45 @@
+# Secrets
+.env
+.env.*
+
+# Logs (agent.log contains the Telegram bot token in error URLs)
+*.log
+*.log.*
+*.gz
+
+# Backups (config.py.bak contains a hardcoded Polygon API key)
+*.bak*
+.fix_backups_*/
+
+# Personal trading data
+account.json
+trades.csv
+tracking.csv
+
+# Local assistant instructions
+CLAUDE.md
+
+# Caches
+__pycache__/
+*.py[cod]
+.cache/
+.pytest_cache/
+
+# Databases and large data
+*.sqlite
+*.sqlite3
+*.db
+*.lock
+backtest/data/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Claude Code output
+status.txt
+
+# Alert/trade state
+pending_alerts.json
+active_trades.json

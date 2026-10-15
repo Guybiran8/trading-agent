@@ -1,0 +1,210 @@
+{
+  "weights": {
+    "volume_multiplier": 1.0,
+    "news_bonus": 1.0,
+    "freshness_multiplier": 1.0,
+    "sector_bonus": 1.0,
+    "rs_bonus": 1.0,
+    "accumulation_bonus": 0.6000000000000001,
+    "pullback_bonus": 1.0,
+    "insider_bonus": 1.0,
+    "dark_pool_bonus": 1.0
+  },
+  "performance": {
+    "by_signal_type": {
+      "breakout": {
+        "wins": 0,
+        "losses": 1,
+        "total_pnl": -3.62
+      },
+      "news_driven": {
+        "wins": 0,
+        "losses": 0,
+        "total_pnl": 0.0
+      },
+      "swing": {
+        "wins": 0,
+        "losses": 5,
+        "total_pnl": -20.27
+      },
+      "short": {
+        "wins": 0,
+        "losses": 0,
+        "total_pnl": 0.0
+      },
+      "premarket": {
+        "wins": 0,
+        "losses": 0,
+        "total_pnl": 0.0
+      },
+      "afterhours": {
+        "wins": 0,
+        "losses": 0,
+        "total_pnl": 0.0
+      }
+    },
+    "by_time": {
+      "early": {
+        "wins": 0,
+        "losses": 0
+      },
+      "mid": {
+        "wins": 0,
+        "losses": 5
+      },
+      "late": {
+        "wins": 0,
+        "losses": 1
+      }
+    },
+    "by_time_bucket": {
+      "0930-1000": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1000-1030": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1030-1100": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1100-1130": {
+        "wins": 0,
+        "losses": 2
+      },
+      "1130-1200": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1200-1230": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1230-1300": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1300-1330": {
+        "wins": 0,
+        "losses": 3
+      },
+      "1330-1400": {
+        "wins": 0,
+        "losses": 1
+      },
+      "1400-1430": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1430-1500": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1500-1530": {
+        "wins": 0,
+        "losses": 0
+      },
+      "1530-1600": {
+        "wins": 0,
+        "losses": 0
+      }
+    },
+    "by_regime": {
+      "BULL": {
+        "wins": 0,
+        "losses": 0
+      },
+      "BEAR": {
+        "wins": 0,
+        "losses": 0
+      },
+      "CHOPPY": {
+        "wins": 0,
+        "losses": 0
+      },
+      "NEWS_DRIVEN": {
+        "wins": 0,
+        "losses": 0
+      }
+    },
+    "by_sector": {},
+    "by_conviction": {
+      "HIGH": {
+        "wins": 0,
+        "losses": 2
+      },
+      "SPECULATIVE": {
+        "wins": 0,
+        "losses": 4
+      }
+    },
+    "passive": {
+      "total": 9619,
+      "win_5pct": 480,
+      "stopped": 1694,
+      "flat": 7445,
+      "by_scanner": {
+        "SHORT": {
+          "total": 1163,
+          "wins": 43
+        },
+        "OPEN_SCAN": {
+          "total": 688,
+          "wins": 126
+        },
+        "SWING": {
+          "total": 5981,
+          "wins": 174
+        },
+        "DAY_BREAKOUT": {
+          "total": 1104,
+          "wins": 107
+        },
+        "VOLUME_AWAKENING": {
+          "total": 619,
+          "wins": 23
+        },
+        "DAY_NEWS": {
+          "total": 64,
+          "wins": 7
+        }
+      }
+    }
+  },
+  "adjustments": [
+    "[2026-07-26] Passive alerts: 196 tracked, 2% hit 5%+ gain",
+    "[2026-08-02] Passive alerts: 1350 tracked, 5% hit 5%+ gain",
+    "[2026-08-09] Passive alerts: 2305 tracked, 7% hit 5%+ gain",
+    "[2026-08-16] Passive alerts: 2926 tracked, 7% hit 5%+ gain",
+    "[2026-08-23] Passive alerts: 3648 tracked, 7% hit 5%+ gain",
+    "[2026-08-30] Passive alerts: 4603 tracked, 6% hit 5%+ gain",
+    "[2026-09-06] accumulation_bonus -0.1 (swing 0% win rate)",
+    "[2026-09-06] Best time window: 1300-1330 (0% win rate)",
+    "[2026-09-06] Weakest window: 1300-1330 (0% win rate) \u2014 raise threshold",
+    "[2026-09-06] Passive alerts: 5334 tracked, 6% hit 5%+ gain",
+    "[2026-09-13] accumulation_bonus -0.1 (swing 0% win rate)",
+    "[2026-09-13] Best time window: 1300-1330 (0% win rate)",
+    "[2026-09-13] Weakest window: 1300-1330 (0% win rate) \u2014 raise threshold",
+    "[2026-09-13] Passive alerts: 6051 tracked, 5% hit 5%+ gain",
+    "[2026-09-20] accumulation_bonus -0.1 (swing 0% win rate)",
+    "[2026-09-20] Best time window: 1300-1330 (0% win rate)",
+    "[2026-09-20] Weakest window: 1300-1330 (0% win rate) \u2014 raise threshold",
+    "[2026-09-20] Passive alerts: 7023 tracked, 5% hit 5%+ gain",
+    "[2026-09-27] accumulation_bonus -0.1 (swing 0% win rate)",
+    "[2026-09-27] Best time window: 1300-1330 (0% win rate)",
+    "[2026-09-27] Weakest window: 1300-1330 (0% win rate) \u2014 raise threshold",
+    "[2026-09-27] Passive alerts: 7638 tracked, 5% hit 5%+ gain",
+    "[2026-09-28] [recommend] accumulation_bonus -0.1 (swing 0% win rate)",
+    "[2026-09-28] Best time window: 1300-1330 (0% win rate)",
+    "[2026-09-28] Weakest window: 1300-1330 (0% win rate) \u2014 raise threshold",
+    "[2026-09-28] Passive alerts: 7789 tracked, 5% hit 5%+ gain",
+    "[2026-10-11] [recommend] accumulation_bonus -0.1 (swing 0% win rate)",
+    "[2026-10-11] Best time window: 1300-1330 (0% win rate)",
+    "[2026-10-11] Weakest window: 1300-1330 (0% win rate) \u2014 raise threshold",
+    "[2026-10-11] Passive alerts: 9175 tracked, 5% hit 5%+ gain"
+  ],
+  "last_weekly_report": "2026-10-11T00:01:12.424096-04:00",
+  "confirmed_trade_adjustments": []
+}

@@ -43,3 +43,8 @@ status.txt
 # Alert/trade state
 pending_alerts.json
 active_trades.json
+
+# Self-improvement output and trade archives
+improvements.json
+self_improvement_recommendations.json
+trades_archive*.csv

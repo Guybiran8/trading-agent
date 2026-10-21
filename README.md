@@ -1,6 +1,6 @@
 # Trading Agent
 
-[WRITE THIS YOURSELF: what this is and why I built it]
+The agent scans stocks in the Nasdaq, Russell and S&P 500, looks at their charts, and analyzes breakouts using support and resistance, moving averages, volume and more. When it finds a good stock, it sends me a message on Telegram that tells me the price to exit at if it goes down or up and the potential gain. Then it tracks the stock until it exits. I came up with the strategy ideas and ways to fix problems, and Claude did most of the coding.
 
 ## Setup
 

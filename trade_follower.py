@@ -16,15 +16,10 @@ import yfinance as yf
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TIMEZONE, TRADES_CSV
 from active_trades import load_trades, remove_trade, update_trade_fields
 from data_fetcher import close_yf_thread_cache
+from performance_logger import FIELDNAMES
 
 _active_threads: dict = {}
 _active_lock = threading.Lock()
-
-FIELDNAMES = [
-    "symbol", "date", "signal_type", "trade_type", "scanner",
-    "entry_price", "stop", "target", "conviction",
-    "status", "exit_price", "exit_date", "pnl_pct",
-]
 
 
 def _tg(text: str) -> None:
@@ -65,6 +60,27 @@ def _ensure_header_matches() -> bool:
     return first_line != ",".join(FIELDNAMES)
 
 
+def _is_short(trade: dict) -> bool:
+    return trade.get("signal", "") in ("SHORT", "STRONG SELL", "SELL")
+
+
+def _exit_target(trade: dict) -> float:
+    """The target an exit is judged against: the one set at entry, never a raised one."""
+    return float(trade.get("original_target") or trade.get("price_target") or 0)
+
+
+def _evaluate_exit(trade: dict, price: float):
+    """Return "STOPPED", "TARGET_HIT" or None for the current price. Stop is checked first."""
+    stop     = float(trade.get("stop_loss", 0) or 0)
+    target   = _exit_target(trade)
+    is_short = _is_short(trade)
+    if stop and ((is_short and price >= stop) or (not is_short and price <= stop)):
+        return "STOPPED"
+    if target and ((is_short and price <= target) or (not is_short and price >= target)):
+        return "TARGET_HIT"
+    return None
+
+
 def _log_closed_trade(trade: dict, exit_price: float, status: str) -> None:
     entry  = float(trade.get("entry_price", 0))
     is_short = trade.get("signal", "") in ("SHORT", "STRONG SELL", "SELL")
@@ -94,12 +110,13 @@ def _log_closed_trade(trade: dict, exit_price: float, status: str) -> None:
             "scanner":     trade.get("scanner", ""),
             "entry_price": entry,
             "stop":        trade.get("stop_loss", 0),
-            "target":      trade.get("price_target", 0),
+            "target":      _exit_target(trade),
             "conviction":  trade.get("conviction", "SPECULATIVE"),
             "status":      status,
             "exit_price":  exit_price,
             "exit_date":   date.today().isoformat(),
             "pnl_pct":     pnl,
+            "target_source": "reconstructed" if trade.get("target_reconstructed") else "original",
         })
 
     # Trigger self-improvement recording
@@ -153,6 +170,9 @@ def _monitor_loop_impl(symbol: str) -> None:
             entry_str = trades[symbol].get("entry_time", "")
             if entry_str:
                 entry_time = datetime.fromisoformat(entry_str)
+            # Freeze the entry target so later new highs can't move the exit level
+            if not trades[symbol].get("original_target"):
+                update_trade_fields(symbol, {"original_target": trades[symbol].get("price_target", 0)})
     except Exception:
         pass
 
@@ -190,15 +210,17 @@ def _monitor_loop_impl(symbol: str) -> None:
         price    = float(df_5m["Close"].iloc[-1])
         entry    = float(t.get("entry_price", 0))
         stop     = float(t.get("stop_loss", 0))
-        target   = float(t.get("price_target", 0))
+        target   = _exit_target(t)
         is_short = t.get("signal", "") in ("SHORT", "STRONG SELL", "SELL")
         trade_type = t.get("trade_type", "SWING TRADE")
         new_high = float(t.get("new_high", entry) or entry)
 
         pnl = round((price - entry) / entry * 100 * (-1 if is_short else 1), 2) if entry else 0
 
+        exit_status = _evaluate_exit(t, price)
+
         # ── STOP HIT ─────────────────────────────────────────────────────────
-        if stop and ((is_short and price >= stop) or (not is_short and price <= stop)):
+        if exit_status == "STOPPED":
             _tg(
                 f"🛑 *STOP HIT — EXIT NOW: {symbol}*\n"
                 f"Price: ${price:.2f} | Stop: ${stop:.2f}\n"
@@ -209,14 +231,15 @@ def _monitor_loop_impl(symbol: str) -> None:
             break
 
         # ── TARGET HIT ───────────────────────────────────────────────────────
-        if target and ((is_short and price <= target) or (not is_short and price >= target)):
-            new_target = round(price * (0.95 if is_short else 1.05), 2)
+        if exit_status == "TARGET_HIT":
             _tg(
-                f"🎯 *TARGET HIT: {symbol}*\n"
-                f"Price: ${price:.2f} | Target was: ${target:.2f}\n"
-                f"P&L: {pnl:+.2f}% | Raising target to ${new_target:.2f}"
+                f"🎯 *TARGET HIT — EXIT: {symbol}*\n"
+                f"Price: ${price:.2f} | Target: ${target:.2f}\n"
+                f"P&L: {pnl:+.2f}%"
             )
-            update_trade_fields(symbol, {"price_target": new_target})
+            _log_closed_trade(t, price, "TARGET_HIT")
+            remove_trade(symbol)
+            break
 
         # ── 50% GIVE-BACK (intraday momentum dead) ───────────────────────────
         if not is_short and not momentum_alerted and new_high and entry and new_high > entry * 1.005:
@@ -232,8 +255,7 @@ def _monitor_loop_impl(symbol: str) -> None:
 
         # ── NEW HIGH ─────────────────────────────────────────────────────────
         if not is_short and price > new_high * 1.005:
-            new_target = round(price * 1.04, 2)
-            update_trade_fields(symbol, {"new_high": price, "price_target": new_target})
+            update_trade_fields(symbol, {"new_high": price})
             new_high = price
 
         # ── VOLUME DEAD 10 CONSECUTIVE MINUTES (day trades only) ─────────────

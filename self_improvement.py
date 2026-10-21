@@ -162,7 +162,7 @@ def _classify_time_bucket(trade: dict) -> str:
 def record_trade_result(trade: dict, exit_price: float, pnl_pct: float, status: str) -> None:
     data   = _load()
     perf   = data["performance"]
-    is_win = status in ("TARGET_HIT", "MANUAL_CLOSE") and pnl_pct > 0
+    is_win = pnl_pct > 0
 
     sig_type   = _classify_signal_type(trade)
     time_slot  = _classify_time(trade)

@@ -33,7 +33,9 @@ def already_alerted(symbol: str) -> bool:
 
 
 def mark_alerted(symbol: str):
+    """Called by the scheduler for each swing alert actually emitted (3/day cap)."""
     global _swing_count_today
+    reset_if_new_day()
     _swing_alerted_today.add(symbol)
     _swing_count_today += 1
 

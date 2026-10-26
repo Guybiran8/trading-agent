@@ -17,6 +17,7 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TIMEZONE, TRADES_CSV
 from active_trades import load_trades, remove_trade, update_trade_fields
 from data_fetcher import close_yf_thread_cache
 from performance_logger import FIELDNAMES
+from exit_rules import time_exit_due
 
 _active_threads: dict = {}
 _active_lock = threading.Lock()
@@ -238,6 +239,17 @@ def _monitor_loop_impl(symbol: str) -> None:
                 f"P&L: {pnl:+.2f}%"
             )
             _log_closed_trade(t, price, "TARGET_HIT")
+            remove_trade(symbol)
+            break
+
+        # ── TIME EXIT (new trades only: those with max_hold_days) ────────────
+        in_session = (now.hour, now.minute) >= (9, 30) and now.hour < 16
+        if in_session and time_exit_due(t, now):
+            _tg(
+                f"⏱ *TIME EXIT — {t.get('max_hold_days')} trading days: {symbol}*\n"
+                f"Price: ${price:.2f} | P&L: {pnl:+.2f}%"
+            )
+            _log_closed_trade(t, price, "TIME_EXIT")
             remove_trade(symbol)
             break
 

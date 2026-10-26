@@ -191,6 +191,8 @@ def _handle_buy_confirmation(symbol: str, entry_price: float | None, raw: str) -
         "low_vol_count":    0,
         "entry_time":       datetime.now(TIMEZONE).isoformat(),
     }
+    if pending.get("max_hold_days"):
+        trade["max_hold_days"] = pending["max_hold_days"]    # time exit (new trades only)
     save_trade(trade)
 
     pos_size = pending.get("position_size", 0)

@@ -29,6 +29,14 @@ TELEGRAM_ALERTS_ENABLED = {
     "PREMARKET":        False,
 }
 
+# Scanners whose results are dropped before alerting (code kept, not deleted).
+# Unlisted scanners default to True. Off since 2026-10-26: worst live results
+# (10-day excess vs random liquid stocks: DAY_NEWS -10.2%, OPEN_SCAN -2.8%).
+SCANNERS_ENABLED = {
+    "DAY_NEWS":  False,
+    "OPEN_SCAN": False,
+}
+
 # ── Account ───────────────────────────────────────────────────────────────────
 STARTING_BALANCE         = 13424.0
 HIGH_CONVICTION_SIZE     = 1000.0

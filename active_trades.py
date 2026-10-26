@@ -71,6 +71,7 @@ def save_pending_alert(result: dict) -> None:
         "position_size": result.get("position_size", 0),
         "rsi":          result.get("rsi", 0),
         "atr":          result.get("atr", 0),
+        "max_hold_days": result.get("max_hold_days"),
         "alerted_at":   datetime.now(TIMEZONE).isoformat(),
     }
     _save(PENDING_ALERTS_FILE, pending)

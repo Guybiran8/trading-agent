@@ -4,7 +4,8 @@ import threading
 import yfinance as yf
 from datetime import datetime, timedelta, date
 
-from config import TELEGRAM_ALERTS_ENABLED
+from config import TELEGRAM_ALERTS_ENABLED, SCANNERS_ENABLED
+from exit_rules import apply_exit_rules, scale_position
 from config import (
     TIMEZONE, NEWS_SCAN_INTERVAL, DAY_SCAN_INTERVAL,
     SWING_SCAN_INTERVAL, PREMARKET_SCAN_INTERVAL,
@@ -145,14 +146,18 @@ def _enrich_result(result: dict) -> dict:
     return result
 
 
-def _emit_alert(result: dict) -> None:
+def _emit_alert(result: dict) -> bool:
+    """Send / log one alert. Returns True only if it was actually emitted."""
     global _alerted_today, _daily_limit_notified
     _reset_if_new_day()
     sym = result["symbol"]
 
+    if not SCANNERS_ENABLED.get(result.get("scanner", ""), True):
+        return False
+
     with _alerted_lock:
         if sym in _alerted_today:
-            return
+            return False
         _alerted_today.add(sym)
 
     # Minimum stop distance check (1.5% for longs, 1.5% for shorts)
@@ -164,13 +169,20 @@ def _emit_alert(result: dict) -> None:
             print(f"  SKIPPED (stop invalid {em_stop_pct:.2f}%): {sym}")
             with _alerted_lock:
                 _alerted_today.discard(sym)
-            return
+            return False
         if em_stop_pct < 1.5:
             em_signal = result.get("signal", "")
             if em_signal not in ("SHORT", "STRONG SELL", "SELL"):
                 result["stop_loss"] = round(em_price * 0.985, 2)
             else:
                 result["stop_loss"] = round(em_price * 1.015, 2)
+
+    # Stop >= 1.5 ATR, target = 2.5 ATR, 10-day time exit (exit_rules.py)
+    if not apply_exit_rules(result):
+        print(f"  SKIPPED (no ATR for exit rules): {sym}")
+        with _alerted_lock:
+            _alerted_today.discard(sym)
+        return False
 
     # Daily loss limit check
     if is_daily_limit_hit():
@@ -180,7 +192,7 @@ def _emit_alert(result: dict) -> None:
             summary = get_summary()
             send_daily_limit_message(get_daily_pnl(), summary["balance"])
         print(f"  BLOCKED (daily limit): {sym}")
-        return
+        return False
 
     # Enrich with sector, insider, dark pool
     result = _enrich_result(result)
@@ -206,7 +218,8 @@ def _emit_alert(result: dict) -> None:
 
     # Position size
     conviction = result.get("conviction", "SPECULATIVE")
-    result["position_size"] = get_position_size(conviction)
+    # A widened stop shrinks the position so the dollar risk stays the same
+    result["position_size"] = scale_position(get_position_size(conviction), result.get("risk_scale", 1.0))
 
     if TELEGRAM_ALERTS_ENABLED.get(result.get("scanner", ""), True):
         send_trade_alert(result)
@@ -219,6 +232,7 @@ def _emit_alert(result: dict) -> None:
         pass
 
     print(f"  ALERT: {sym} | {result.get('scanner')} | Score {result.get('score')} | {conviction}")
+    return True
 
 
 def _run_news_scan(regime: dict) -> dict:
@@ -262,13 +276,14 @@ def _run_swing_scan(symbols: list, regime: dict) -> None:
         global _swing_running
         _swing_running = True
         try:
-            from swing_scanner import run_swing_scanner
+            from swing_scanner import run_swing_scanner, mark_alerted
             _reset_if_new_day()
             with _alerted_lock:
                 alerted_copy = set(_alerted_today)
             alerts = run_swing_scanner(symbols, alerted_copy)
             for a in alerts:
-                _emit_alert(a)
+                if _emit_alert(a):
+                    mark_alerted(a["symbol"])     # counts toward the 3/day swing cap
         except Exception as e:
             print(f"[SwingScanner] Error: {e}")
         finally:
@@ -600,7 +615,8 @@ def run_auto_scheduler() -> None:
             _run_volume_awakening(symbols)
 
             # 9:30 AM open scan (first minute only)
-            if now.hour == 9 and now.minute == 30 and _last_open_scan != today:
+            if (now.hour == 9 and now.minute == 30 and _last_open_scan != today
+                    and SCANNERS_ENABLED.get("OPEN_SCAN", True)):
                 def _open_scan_bg():
                     global _last_open_scan
                     try:
